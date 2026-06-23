@@ -132,6 +132,10 @@
     @media (max-width: 900px) { .reel-grid { grid-template-columns: repeat(2,1fr); } }
     @media (max-width: 560px) { .reel-grid { grid-template-columns: 1fr; } .nav-links { display: none; } }
 
+    /* ── WIDE CARD (documental 16:9) ── */
+    .reel-card.wide { grid-column: 1 / -1; }
+    .reel-card.wide .reel-embed-wrapper { padding-bottom: 56.25%; /* 16:9 */ }
+
     .reel-card {
       position: relative; background: var(--card-bg);
       border: 1px solid var(--border); overflow: hidden;
@@ -286,7 +290,7 @@
     <div class="section-header reveal">
       <h2 class="section-title">Reels</h2>
       <div class="section-line"></div>
-      <span class="section-count">06 Trabajos</span>
+      <span class="section-count">04 Trabajos</span>
     </div>
 
     <!--
@@ -309,27 +313,21 @@
       </div>
 
       <div class="reel-card reveal" style="transition-delay:0.12s"
-           data-reel-url="https://www.instagram.com/reel/DV_yZlsCuvu/"
+           data-reel-url="https://www.instagram.com/p/DZDkgQvDGM4/"
            data-ig-client="fotovideorostik">
       </div>
 
       <div class="reel-card reveal" style="transition-delay:0.19s"
-           data-reel-url="https://www.instagram.com/reel/DNV6FGegfoX/"
+           data-reel-url="https://www.youtube.com/shorts/ZsQ9k-F32wQ"
+           data-platform="youtube"
+           data-yt-id="ZsQ9k-F32wQ"
            data-ig-client="fotovideorostik">
       </div>
 
-      <div class="reel-card reveal" style="transition-delay:0.26s"
-           data-reel-url="https://www.instagram.com/reel/DUbRpzCjG9T/"
-           data-ig-client="fotovideorostik">
-      </div>
-
-      <div class="reel-card reveal" style="transition-delay:0.33s"
-           data-reel-url="https://www.instagram.com/reel/DVwZT3QjHbO/"
-           data-ig-client="fotovideorostik">
-      </div>
-
-      <div class="reel-card reveal" style="transition-delay:0.40s"
-           data-reel-url="https://www.instagram.com/reel/DWQ9pJACpx_/"
+      <div class="reel-card wide reveal" style="transition-delay:0.26s"
+           data-reel-url="https://www.youtube.com/watch?v=NK_CoXCgFWU"
+           data-platform="youtube"
+           data-yt-id="NK_CoXCgFWU"
            data-ig-client="fotovideorostik">
       </div>
 
@@ -386,6 +384,8 @@
       const num = String(index + 1).padStart(2, '0');
       const avatarSrc = `https://unavatar.io/instagram/${clientHandle}`;
       const initials  = clientHandle.slice(0, 2).toUpperCase();
+      const isYT      = card.dataset.platform === 'youtube';
+      const linkLabel = isYT ? 'Ver en YouTube' : 'Ver en Instagram';
 
       card.innerHTML = `
         <a class="card-profile" href="https://www.instagram.com/${clientHandle}/" target="_blank" rel="noopener">
@@ -402,7 +402,7 @@
           <div class="reel-skeleton"></div>
           <a class="reel-play-overlay" href="${reelUrl}" target="_blank" rel="noopener">
             <div class="play-icon">${PLAY_SVG}</div>
-            <span class="ig-label">Ver en Instagram</span>
+            <span class="ig-label">${linkLabel}</span>
           </a>
         </div>
 
@@ -417,23 +417,49 @@
       const wrapper  = card.querySelector('.reel-embed-wrapper');
       const skeleton = card.querySelector('.reel-skeleton');
 
+      function insertImg(src, alt) {
+        const img = document.createElement('img');
+        img.className = 'reel-thumb-img';
+        img.src = src;
+        img.alt = alt || 'Video preview';
+        img.onload  = () => skeleton && skeleton.remove();
+        img.onerror = () => useFallback(skeleton);
+        wrapper.insertBefore(img, wrapper.firstChild);
+      }
+
+      // 1 — Thumbnail hardcodeada en data-thumb (funciona en GitHub Pages sin CORS)
+      if (card.dataset.thumb) {
+        insertImg(card.dataset.thumb, 'Video preview');
+        return;
+      }
+
+      // 2 — YouTube: CDN público, sin token
+      if (card.dataset.platform === 'youtube') {
+        const ytId = card.dataset.ytId;
+        if (ytId) {
+          const img = document.createElement('img');
+          img.className = 'reel-thumb-img';
+          img.alt = 'Video preview';
+          img.src = `https://img.youtube.com/vi/${ytId}/maxresdefault.jpg`;
+          img.onload  = () => skeleton && skeleton.remove();
+          img.onerror = () => {
+            img.onerror = () => useFallback(skeleton);
+            img.src = `https://img.youtube.com/vi/${ytId}/hqdefault.jpg`;
+          };
+          wrapper.insertBefore(img, wrapper.firstChild);
+        } else {
+          useFallback(skeleton);
+        }
+        return;
+      }
+
+      // 3 — Instagram oEmbed (requiere token en producción; funciona en local/dev)
       try {
-        // Instagram oEmbed — public endpoint, no token needed for basic info
         const oembedUrl = `https://graph.facebook.com/v19.0/instagram_oembed?url=${encodeURIComponent(reelUrl)}&maxwidth=320&fields=thumbnail_url,author_name`;
         const res = await fetch(oembedUrl);
-
         if (res.ok) {
           const data = await res.json();
-          if (data.thumbnail_url) {
-            const img = document.createElement('img');
-            img.className = 'reel-thumb-img';
-            img.src = data.thumbnail_url;
-            img.alt = 'Reel preview';
-            img.onload  = () => skeleton && skeleton.remove();
-            img.onerror = () => useFallback(skeleton);
-            wrapper.insertBefore(img, wrapper.firstChild);
-            return;
-          }
+          if (data.thumbnail_url) { insertImg(data.thumbnail_url, 'Reel preview'); return; }
         }
         useFallback(skeleton);
       } catch {
